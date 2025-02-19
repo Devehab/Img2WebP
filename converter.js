@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupFileInputs();
     setupDragAndDrop();
     setupConvertButton();
+    setupClipboardPaste();
 });
 
 function setupTabs() {
@@ -182,6 +183,55 @@ async function readAllEntries(dirReader, existingResults) {
 function setupConvertButton() {
     const convertBtn = document.getElementById('convertBtn');
     convertBtn.addEventListener('click', convertImages);
+}
+
+function setupClipboardPaste() {
+    document.addEventListener('paste', async (e) => {
+        e.preventDefault();
+        
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        const imagePromises = [];
+        
+        // First, collect all promises for image processing
+        for (const item of items) {
+            if (item.type.indexOf('image') === 0) {
+                const file = item.getAsFile();
+                if (file) {
+                    imagePromises.push(
+                        new Promise((resolve) => {
+                            // Create a unique name for the file
+                            const timestamp = new Date().getTime() + Math.random().toString(36).substring(7);
+                            const newFile = new File([file], `pasted-image-${timestamp}.${file.type.split('/')[1] || 'png'}`, {
+                                type: file.type
+                            });
+                            resolve(newFile);
+                        })
+                    );
+                }
+            }
+        }
+
+        // Wait for all images to be processed
+        try {
+            const imageFiles = await Promise.all(imagePromises);
+            
+            // Filter out duplicates
+            const uniqueFiles = imageFiles.filter(newFile => 
+                !selectedFiles.some(existingFile => 
+                    existingFile.name === newFile.name && 
+                    existingFile.size === newFile.size
+                )
+            );
+
+            if (uniqueFiles.length > 0) {
+                appendFiles(uniqueFiles);
+                showToast(`${uniqueFiles.length} image(s) pasted successfully`, 'success');
+            }
+        } catch (error) {
+            console.error('Error processing pasted images:', error);
+            showToast('Error processing some images', 'error');
+        }
+    });
 }
 
 // Handle folder selection
